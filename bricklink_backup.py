@@ -4,6 +4,7 @@ import re
 import sys
 import toml
 import argparse
+from json2xml import json2xml
 from pathlib import Path
 from datetime import datetime
 from requests_oauthlib import OAuth1Session
@@ -66,6 +67,21 @@ class FileWriter:
             dict_writer.writeheader()
             dict_writer.writerows(flat_data)
 
+    @staticmethod
+    def json_to_xml(data, output_filename, path):
+        """Takes a JSON (with possible nested dictionaries) and exports to a single CSV file."""
+        print("Writing data into .xml file....")
+        # As it's a changeable path, check and make directory if doesn't exist
+        Path(path).mkdir(parents=True, exist_ok=True)
+
+        output_filename = FileWriter.slugify(output_filename)
+        #print(data)
+
+        j2xml = json2xml.Json2xml(data, wrapper="sequence", pretty=True, attr_type=False).to_xml()
+        j2xml.encode('utf-8')
+        with open(f"{path}/{output_filename}.xml", 'w', encoding='utf-8', errors='replace') as f:
+            f.write(j2xml)
+
 class Config:
     def __init__(self, path):
         self.data = toml.load(path, _dict=dict)
@@ -108,21 +124,28 @@ class Bricklink:
         if response.status_code != 200:
             print(f"Error: {response.text}")
         
-        return response.json()["data"]
+        response.encoding = 'utf-8'
+        
+        return response.json()['data']
 
-    def save_all_inventories(self):
+    def save_all_inventories(self, file_type):
         data = self.fetch_inventory()
         filename = f"{datetime.now().strftime('%m-%d-%Y-%H-%M-%S')} - Bricklink Backup"
-        FileWriter.json_to_csv(data, filename, self.config['EXPORT']['PATH'])
-        print(['#'] * 25)
+
+        if file_type.lower() == "csv":
+            FileWriter.json_to_csv(data, filename, self.config['EXPORT']['PATH'])
+        else:
+            FileWriter.json_to_xml(data, filename, self.config['EXPORT']['PATH'])
+        print('#' * 25)
         print("File saved!")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A simple script to backup bricklink store inventories.",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-c", "--config", help="set custom config name.", default="config.toml")
+    parser.add_argument("-f", "--file", help="set file type (xml or csv)", default="xml")
     args = vars(parser.parse_args())
 
     config = Config(args["config"])
     store = Bricklink(config)
-    store.save_all_inventories()
+    store.save_all_inventories(args["file"])
