@@ -1,6 +1,6 @@
-import os
 import csv
-import json
+import unicodedata
+import re
 import sys
 import toml
 import argparse
@@ -9,6 +9,27 @@ from datetime import datetime
 from requests_oauthlib import OAuth1Session
 
 class FileWriter:
+    @staticmethod
+    def slugify(value, allow_unicode=False):
+        """
+        Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+        dashes to single dashes. Remove characters that aren't alphanumerics,
+        underscores, or hyphens. Convert to lowercase. Also strip leading and
+        trailing whitespace, dashes, and underscores.
+        """
+        value = str(value)
+        if allow_unicode:
+            value = unicodedata.normalize("NFKC", value)
+        else:
+            value = (
+                unicodedata.normalize("NFKD", value)
+                .encode("ascii", "ignore")
+                .decode("ascii")
+            )
+        value = re.sub(r"[^\w\s-]", "", value.lower())
+        return re.sub(r"[-\s]+", "-", value).strip("-_")
+
+
     @staticmethod
     def flatten_json(y):
         """Recursively flattens a nested JSON."""
@@ -28,44 +49,49 @@ class FileWriter:
         return out
 
     @staticmethod
-    def json_to_csv(data, output_filename):
+    def json_to_csv(data, output_filename, path):
         """Takes a JSON (with possible nested dictionaries) and exports to a single CSV file."""
+        print("Writing data into .csv file....")
+        # As it's a changeable path, check and make directory if doesn't exist
+        Path(path).mkdir(parents=True, exist_ok=True)
 
+        output_filename = FileWriter.slugify(output_filename)
         # First, flatten the JSON data
         flat_data = [FileWriter.flatten_json(item) for item in data]
 
         # Writing to CSV
         keys = set().union(*(d.keys() for d in flat_data))
-        with open(output_filename, 'w', newline='') as output_file:
+        with open(f"{path}/{output_filename}.csv", 'w', newline='', encoding="utf-8") as output_file:
             dict_writer = csv.DictWriter(output_file, keys)
             dict_writer.writeheader()
             dict_writer.writerows(flat_data)
 
-
 class Config:
     def __init__(self, path):
-        if path is None:
-            path = "config.toml"
         self.data = toml.load(path, _dict=dict)
 
 class Bricklink:
     # OAuth Credentials
     def __init__(self, config):
-        self.config:Config = config
+        self.config = config.data
         self.setup_keys()
         self.auth_session()
 
     def setup_keys(self):
+        """Setting up variables from config"""
+        print("Importing API keys...")
+
         for item in self.config["API"].values():
             if item == "" or item == []:
                 print("Missing configuration data!")
                 sys.exit()
 
-        self.CONSUMER_KEY:str = config["API"]["CONSUMER_KEY"]
-        self.CONSUMER_SECRET:str = config["API"]["CONSUMER_SECRET"]
-        self.TOKEN_VALUE:str = config["API"]["TOKEN_VALUE"]
-        self.TOKEN_SECRET:str = config["API"]["TOKEN_SECRET"]
-        self.INVENTORIES:list = self.config["API"]["INVENTORIES"]
+        # Better than constantly referencing the config var
+        # Makes it easier to change naming etc in future.
+        self.CONSUMER_KEY:str = self.config["API"]["CONSUMER_KEY"]
+        self.CONSUMER_SECRET:str = self.config["API"]["CONSUMER_SECRET"]
+        self.TOKEN_VALUE:str = self.config["API"]["TOKEN_VALUE"]
+        self.TOKEN_SECRET:str = self.config["API"]["TOKEN_SECRET"]
 
     def auth_session(self):
         self.oauth = OAuth1Session(
@@ -75,8 +101,9 @@ class Bricklink:
             resource_owner_secret=self.TOKEN_SECRET
         )
 
-    def fetch_inventory(self, id):
-        response = self.oauth.get(f'https://api.bricklink.com/api/store/v1/inventories/{id}')
+    def fetch_inventory(self):
+        print("Getting data from the Bricklink API...")
+        response = self.oauth.get(f'https://api.bricklink.com/api/store/v1/inventories')
 
         if response.status_code != 200:
             print(f"Error: {response.text}")
@@ -84,21 +111,16 @@ class Bricklink:
         return response.json()["data"]
 
     def save_all_inventories(self):
-        if self.config["API"]["INVENTORIES"] == []:
-            print("No inventories found!")
-
-        for inv in self.config["API"]["INVENTORIES"]:
-            data = self.fetch_inventory(inv)
-
-            Path(self.config['EXPORT']['PATH']).mkdir(parents=True, exist_ok=True)
-            filename = os.path.normpath(f"{self.config['EXPORT']['PATH']}/{datetime.now()} - ID {inv}.csv")
-
-            FileWriter.json_to_csv(data, filename)
+        data = self.fetch_inventory()
+        filename = f"{datetime.now().strftime('%m-%d-%Y-%H-%M-%S')} - Bricklink Backup"
+        FileWriter.json_to_csv(data, filename, self.config['EXPORT']['PATH'])
+        print(['#'] * 25)
+        print("File saved!")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A simple script to backup bricklink store inventories.",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-c", "--config", help="set custom config name.")
+    parser.add_argument("-c", "--config", help="set custom config name.", default="config.toml")
     args = vars(parser.parse_args())
 
     config = Config(args["config"])

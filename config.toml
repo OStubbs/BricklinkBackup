@@ -3,8 +3,7 @@ CONSUMER_KEY = ""
 CONSUMER_SECRET = ""
 TOKEN_VALUE = ""
 TOKEN_SECRET = ""
-INVENTORIES = []
 
 [EXPORT]
-
+# no trailing or leading slashes
 PATH="data"
