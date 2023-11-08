@@ -1,5 +1,5 @@
 # BricklinkBackup
-A simple python script to backup bricklink inventories, takes all inventory data and puts it in a single tabled csv file that can easily be opened in programs like Excel.
+A simple python script to backup bricklink inventories, takes all inventory data and puts it in a .XML file or a single tabled csv file that can easily be opened in programs like Excel.
 
 ## How to setup
 
