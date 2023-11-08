@@ -7,7 +7,7 @@ A simple python script to backup bricklink inventories, takes all inventory data
 2. Extract into a folder of your choice
 3. Run `install_python.bat` to install Python. When the Python installer appears you select `Add python.exe to Path`.
 4. Run `setup.bat` - This sets up Python to run the script
-5. Fill in your API information into the `config.toml` configuration file (tokens inside the quotes)
+5. Using notepad or similar fill in your API information into the `config.toml` configuration file (tokens inside the quotes)
 
 ## How to run
 
