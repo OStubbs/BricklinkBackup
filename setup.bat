@@ -14,3 +14,4 @@ CALL venv\Scripts\deactivate.bat
 
 echo #######################
 echo Bricklink-Backup has been setup!
+pause
